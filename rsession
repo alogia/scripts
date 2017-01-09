@@ -1,0 +1,24 @@
+#!/usr/bin/ruby
+
+require 'fileutils'
+
+SESSION='jmaji'
+WATCH='jundi'
+INCOMPLETE='pagbu'
+COMPLETE='mulno'
+
+if ARGV.size != 1
+  puts "Pilno: rsession DIR"
+  exit 1
+end
+FOLDER=ARGV[0]
+
+Dir.mkdir(FOLDER)     unless FileTest::directory?(FOLDER)
+Dir.chdir(FOLDER)
+
+Dir.mkdir(SESSION)    unless FileTest::directory?(SESSION)
+Dir.mkdir(WATCH)      unless FileTest::directory?(WATCH)
+Dir.mkdir(INCOMPLETE) unless FileTest::directory?(INCOMPLETE)
+Dir.mkdir(COMPLETE)   unless FileTest::directory?(COMPLETE)
+
+system('rtorrent')

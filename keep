@@ -1,0 +1,41 @@
+#!/bin/bash
+
+KEEP_FILE="$HOME/.keep_file"
+
+if [ "$1" == "-s" ]
+then
+    FILE="$2"
+    echo $FILE > "$KEEP_FILE"
+    echo "File set to $FILE"
+    exit 0
+fi
+
+if [ -e "$KEEP_FILE" ]
+then
+    FILE=`cat $KEEP_FILE`
+else
+    echo "Error! No file set to save to! Use -s [file]"
+    exit 1
+fi
+
+if [ "$1" == "-q" ]
+then 
+    echo "File is currently $FILE"
+    exit 0
+fi
+
+WORD="$1"
+DEF="$2"
+
+
+if [ -e $FILE ]
+    then
+        echo -e $WORD "\t" $DEF >> $FILE
+    else
+        read -p "Create file $FILE? (y/n): "
+        if [ $REPLY == "y" ] 
+           then 
+              echo -e $WORD "\t" $DEF > $FILE
+        fi
+fi
+

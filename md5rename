@@ -1,0 +1,14 @@
+#!/bin/bash
+
+IFS=`echo -en "\n\b"`
+dir=$PWD
+cd $1
+files=(`ls -1`)
+for name in ${files[@]}
+do
+    echo "Calculating hash for file: $name"
+    HASH=`md5sum $name | cut -d' ' -f 1`
+    mv -v "$name" "$HASH.${name##*.}"
+done
+
+cd $dir

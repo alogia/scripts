@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "กำลังถอดถอนแฟ้ม Demonoid"
+find "$1" -iregex '.*demonoid.*\.txt$' -exec rm -fv \{} \;
+    

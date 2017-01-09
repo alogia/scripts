@@ -1,0 +1,356 @@
+#!/usr/bin/ruby
+
+require 'fileutils'
+#include FileUtils::Verbose
+
+
+def ask(question, quit = false)
+    while true 
+        if quit
+            print question + " (y/n/q):  "
+        else
+            print question + " (y/n):  "
+        end
+        yn = $stdin.gets
+        next if yn.nil? or yn.empty?
+        yn.chomp!
+        if yn == 'y'
+            return true
+        elsif yn == 'n'
+            return false
+        elsif quit and yn == 'q'
+            return nil
+        else 
+            redo
+        end
+    end
+end
+
+def getidx(question, low, high)
+    while true
+        print question + ": "
+        res = $stdin.gets
+        redo if res.nil? or res.empty?
+        idxs = res.chomp.split(" ")
+        nums = Array.new
+        idxs.each do |idx|
+            if !(range = idx.match(/([1-9])*-([1-9])*/)).nil?
+                if !range[1].nil? and !range[2].nil?
+                    range[1].to_i.upto(range[2].to_i) do |x|
+                        nums << x
+                    end
+                elsif range[1].nil? and !range[2].nil?
+                    low.upto(range[2].to_i) do |x|
+                        nums << x
+                    end
+                elsif !range[1].nil? and range[2].nil?
+                    range[1].to_i.upto(high) do |x|
+                        nums << x
+                    end
+                end
+            elsif idx.to_i
+                nums << idx.to_i 
+            end
+        end
+        
+        nums.each do |num|
+            if num.to_i < low or num.to_i > high 
+                print "Invalid Index: " + idx
+                redo
+            end
+        end
+        return nums.uniq.sort
+    end
+end
+
+def parse(file)
+    parts = Array.new
+    file = file.delete('/')
+    if file.include?(" by ") 
+        if ask "Divide with word 'by'?"
+            parts = file.split(" by ")
+        end
+    elsif file.include?(" - ") 
+        if ask "Divide with ' - '?"
+            parts = file.split(" - ")
+        end
+    end
+    
+    while not parts.any?
+        print "Choose delineator: " 
+        del = $stdin.gets.chomp!
+
+        if del.nil? 
+            next
+        elsif not del.empty? and not file.include?(del)
+            puts "Delineator not found. Try again..."
+            next
+        elsif del.empty?
+            parts << file
+            break
+        end
+        
+        parts = file.split(del)
+        if del == '(' 
+            parts = parts + parts.last.split(')') - [parts.last]
+        end
+    end
+    
+    return parts
+end        
+
+def concatenate(array)
+    idxs = getidx("Concatenate which?" ,1, array.size)
+    print "Separator? "
+    joint = $stdin.gets.chomp
+    rem = Array.new
+    res = String.new
+    sub = 1
+    idxs.each do |idx|
+        res << joint if sub > 1
+        sub = sub + 1
+        rem << array[idx - 1]
+        res << array[idx - 1]
+    end
+    return (array - rem) << res
+end
+
+def delete(array)
+    idxs = getidx("Delete which?" ,1, array.size)
+    dels = Array.new
+    idxs.each do |idx|
+        dels << array[idx - 1]
+    end
+    return array - dels
+end
+
+
+# FIXME: Separate by indecies like 'cut'
+def separate(array)
+    idxs = getidx("Operate on which? ",1, array.size)
+    print "Separator? "
+    sep = $stdin.gets.chomp
+    narr = Array.new
+    rem = Array.new
+    idxs.each do |idx|
+        narr << array[idx - 1].split(sep)
+        rem  << array[idx - 1]
+    end
+    return array - rem
+end
+
+def mkdirs(folders)
+    oldCWD = FileUtils.pwd
+    
+    path = folders.join("/")
+    folders.delete_at(folders.size - 1)
+    folders.each do |f|
+        begin  
+            FileUtils.mkdir(f)
+            FileUtils.chdir(f)
+        rescue Errno::EEXIST
+            while true
+                print "Directory Exists:\n\t1) Merge\n\t2) Replace\n\t3) Abort\n\n"
+                print "Choose: "
+                ans = $stdin.gets 
+                redo if ans.nil? or ans.empty?
+                ans.chomp!
+                redo if ans.to_i > 3 or ans.to_i < 1
+                break
+            end
+            if ans.to_i == 1
+                FileUtils.chdir(f)
+            end
+            if ans.to_i == 2
+                print "Are you sure? (y): "
+                ans = $stdin.gets
+                if ans.to_s == 'y'   
+                    FileUtils.rm_rf(f)
+                    FileUtils.mkdir(f)
+                    FileUtils.chdir(f)
+                else
+                    puts "Aborting..."
+                    exit 1
+                end
+            end
+            if ans.to_i == 3  
+                puts "Aborting..."
+                exit 1
+            end
+        
+        end
+    end
+    FileUtils.chdir(oldCWD)
+end
+
+def clean(array)
+    puts "0) All\n"
+    idxs = getidx("Operate on which?",0,array.size) 
+    idxs.each do |idx|
+        if idx == 0
+            array.each do |line|
+                line.gsub!(/_/, ' ')
+            end
+        end
+        array[idx - 1].gsub!(/_/,' ')
+    end
+    
+    return array
+end
+
+def cut(text)
+    ans = getidx("Operate on which? ", 1, text.size).first
+    puts "\n\n------------------------------" 
+    puts text[ans - 1]
+    i = 1
+    words = text[ans - 1].split(/[ _]/)
+    words.each do |word|
+        print i
+        word.size.times do 
+            print ' '
+        end
+        i = i + 1
+    end
+    idxs = getidx("\nDelete Indecies or Range [x-y]",1,words.size)
+    rem = Array.new
+    idxs.each do |idx|
+        rem << words[idx - 1]
+    end
+    
+    text[ans.to_i - 1] = (words - rem).join(" ")
+    return text
+end
+
+def add(array)
+    print "Enter String:  "
+    ans = $stdin.gets
+    return nil if ans.nil? or ans.empty?
+    ans.chomp!
+    return array << ans
+end
+
+def choose(pleft, folders = Array.new)
+    
+    while true do
+        puts "\n\n#############################"
+        puts "------" + folders.join('/') + "-----"
+        puts "Add Path:"
+
+        i = 1
+        pleft.each do |p|
+            puts i.to_s + ") " + p
+            i = i + 1
+        end
+        
+        puts "\n---------\n" 
+        puts i.to_s + ") " + "New"
+        i = i + 1
+        puts i.to_s + ") " + "Cut"
+        i = i + 1
+        puts i.to_s + ") " + "Concat"
+        i = i + 1
+        puts i.to_s + ") " + "Delete"
+        i = i + 1
+        puts i.to_s + ") " + "Divide"
+        i = i + 1
+        puts i.to_s + ") " + "Clean"
+        puts "0) Done"
+        
+        
+        while true
+            print "Choose: "
+            ans = $stdin.gets 
+            redo if ans.nil? or ans.empty?
+            ans.chomp!
+            redo if ans.to_i > i or ans.to_i < 0
+            break
+        end
+        
+        res = nil
+        if ans.to_i == i - 5
+            while res.nil? 
+                res = add(pleft)
+            end
+            pleft = res
+            redo
+        end
+        if ans.to_i == i - 4
+            while res.nil? 
+                res = cut(pleft)
+            end
+            pleft = res
+            redo
+        end
+        if ans.to_i == i - 3
+            while res.nil? 
+                res = concatenate(pleft)
+            end
+            pleft = res
+            redo
+        end
+        if ans.to_i == i - 2 
+            while res.nil? 
+                res = delete(pleft)
+            end
+            pleft = res
+            redo
+        end
+        if ans.to_i == i - 1 
+            while res.nil?
+                res = separate(pleft) 
+            end
+            pleft = res
+            redo
+        end
+        if ans.to_i == i
+            while res.nil?
+                res = clean(pleft)
+            end
+            pleft = res
+            redo
+        end
+        
+        if ans.to_i == 0
+            if folders.nil? or folders.empty?
+                exit 0 if ask("You have no selected folders. Quit?")
+                redo
+            end
+            break
+        end
+        
+        folders << pleft.delete_at(ans.to_i - 1)
+        
+    end
+    return folders
+    
+end
+
+
+ARGV.each do |file|
+    
+    exists = true
+    if not File.exists?(file) 
+         exit 0 unless ask "Directory does not exist; Create directories anyhow?"
+         exists = false
+    end
+        
+    pleft = parse(file)
+    folders = choose(pleft)
+    path = folders.join("/")
+    
+    while true 
+        ans = ask("++++ Move ++++" + file + " ----> " + path, true)
+        
+        if ans.nil?
+            exit 0
+        elsif ans
+            mkdirs(folders)
+            FileUtils.mv(file, path) if exists
+            break
+        else
+            folders = choose(pleft, folders)
+            path = folders.join("/")
+            next
+        end
+    end
+end

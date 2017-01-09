@@ -1,0 +1,19 @@
+#!/bin/bash
+
+case "$1" in
+    *.mp3 ) 
+	id3=`id3v2 -l "$1"` 
+	time=`mp3info -p ' --- Playtime: %m:%s' "$1"`
+	;;
+    *.ogg ) 
+	id3=`ogginfo "$1"`
+	tm=`ogginfo "$1" | grep 'Playback length:' | cut -d ':' -f 2- | tr -d 'm','s',' ' | cut -d '.' -f 1`
+	time=" --- Playtime: $tm"
+	;;
+    * ) echo "Error: Unknown file format"
+esac
+
+
+dirtime=`playtime -q "${1%/*}"` 
+
+echo -e "$time\n$dirtime\n\n$id3"

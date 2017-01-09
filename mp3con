@@ -1,0 +1,18 @@
+#!/bin/bash
+# set $IFS to end-of-line
+IFS=`echo -en "\n\b"`
+value=0
+
+
+for var in `find . -name '*.mp3' | sort -k2g`
+do
+	value=`expr $value + 1`
+	#num1=`echo $var | cut -d'-' -f1`
+	#num2=`echo $var | cut -d'-' -f2 | cut -f1 -d' '`
+	#value=`expr ${num1} + ${num2}`
+	id3v2 -C $var
+	id3v2 -T $value $var
+	echo "Set Track number to: $value"
+done
+
+

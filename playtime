@@ -1,0 +1,12 @@
+#!/bin/bash
+IFS=`echo -en "\n\b"`
+value=0
+
+for var in `find . -name '*.mp3'`
+do
+	time=`mp3info -p "%m" $var`
+	value=`expr $value + $time`
+done
+
+echo "Total time is: `expr $value / 60` hrs"
+
