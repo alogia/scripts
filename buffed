@@ -1,0 +1,33 @@
+#!/bin/bash
+
+USAGE="Usage: buffed up|down"
+
+if [ -z $1 ]
+then
+	echo $USAGE
+	exit 1
+fi
+
+if  [ $1 == "up" ]
+then 
+	if pgrep "openvpn" > /dev/null
+	then 
+		echo "An OpenVPN session is already running. Exiting."
+		exit 1
+	fi
+	echo "Starting Buffed...."
+	/usr/sbin/openvpn --config /etc/openvpn/certs/US_US_East_Coast.ovpn &
+	echo "Done."
+elif [ $1 == "down" ] 
+then
+	if pgrep "openvpn" > /dev/null
+	then
+		echo "Shutting down openvpn...."
+		killall "openvpn"
+		echo "Done."
+	else
+		echo "Error: No OpenVPN process running."
+	fi
+else
+	echo $USAGE
+fi

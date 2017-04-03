@@ -1,0 +1,42 @@
+#!/bin/bash
+
+BACKLIGHT="/sys/class/backlight/intel_backlight"
+MAX_BRIGHTNESS=$(cat "$BACKLIGHT"/max_brightness)
+BRIGHTNESS_INC=$[MAX_BRIGHTNESS * 10 / 100]
+bri () {
+	BRIGHTNESS=$(cat "$BACKLIGHT"/brightness)
+	NEW_BRIGHTNESS=$[BRIGHTNESS + BRIGHTNESS_INC]
+	if (( $NEW_BRIGHTNESS >= $MAX_BRIGHTNESS ))
+	then
+		echo "Brightness: Max"
+		echo $MAX_BRIGHTNESS > "$BACKLIGHT"/brightness
+	else 
+		echo "Brightness: " $NEW_BRIGHTNESS
+		echo $NEW_BRIGHTNESS > "$BACKLIGHT"/brightness
+	fi
+}
+
+brd () {
+	BRIGHTNESS=$(cat "$BACKLIGHT"/brightness)
+	NEW_BRIGHTNESS=$[BRIGHTNESS - BRIGHTNESS_INC]
+	if (( $NEW_BRIGHTNESS <= 0 ))
+	then
+		echo "Brightness: Min"
+		echo "0" > "$BACKLIGHT"/brightness
+	else 
+		echo "Brightness: " $NEW_BRIGHTNESS
+		echo $NEW_BRIGHTNESS > "$BACKLIGHT"/brightness
+	fi
+}
+
+
+if [ $1 = "+" ]
+then
+	bri
+elif [ $1 = "-" ]
+then 
+	brd
+else 
+	echo "Invalid argument" 
+fi
+
