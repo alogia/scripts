@@ -1,0 +1,1 @@
+find "$1" -iregex '.*\.\(flv\|mp4\|avi\|mpg\|divx\|wmv\)' -print0 | xargs -0 mplayer -zoom -fs -shuffle

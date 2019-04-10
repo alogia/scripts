@@ -1,0 +1,6 @@
+#!/bin/bash
+
+nyxmms2 stop  
+nyxmms2 clear 
+nyxmms2 add "$1"
+nyxmms2 play

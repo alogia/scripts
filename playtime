@@ -1,12 +1,93 @@
 #!/bin/bash
 IFS=`echo -en "\n\b"`
-value=0
 
-for var in `find . -name '*.mp3'`
+let thrs=0
+let tmins=0
+let tsecs=0
+
+let tgigs=0
+let tmegs=0
+let tkils=0
+
+
+verbose=True
+while getopts ":q" opt
+do 
+    case $opt in
+        q  ) verbose=False
+             ;;
+        \? ) echo 'usage: playtime [-q] DIR'
+             exit 1
+     esac
+done
+shift $[$OPTIND - 1]
+
+function parseVerbose 
+{ 
+    if [ $verbose = True ] ; then 
+        echo "-- File: $var"
+        echo -e "\t* Playtime: $mins mins $secs secs \t\t\t * Total: $thrs hrs $tmins mins $tsecs secs"
+        echo -e "\t* Size    : $[$size/1024] MBs $[$size%1024] KBs \t\t\t * Total: $tgigs GBs $tmegs MBs $tkils KBs"
+    fi
+}
+
+function printVerbose
+{
+    if [ $verbose = True ] ; then 
+        echo -e "$1"
+    fi
+}
+
+function recalc
+{
+    tkils=`expr $tkils + $size`
+    tmegs=`expr $tmegs + $[$tkils/1024]`
+    tkils=$[$tkils%1024]
+    
+    tgigs=$[$tgigs+($tmegs/1024)]
+    tmegs=$[$tmegs%1024]
+    
+    tsecs=`expr $tsecs + $secs`
+    tmins=`expr $tmins + $mins + $[$tsecs/60]`
+    tsecs=$[$tsecs%60]
+
+    thrs=$[$thrs+($tmins/60)]
+    tmins=$[$tmins%60]
+}
+
+printVerbose "Searching for mp3s..."
+mp3s=(`find $1 -iname '*.mp3'`)
+printVerbose "Found ${#mp3s[@]} file(s)\n"
+
+printVerbose "Searching for oggs..."
+oggs=(`find $1 -iregex '.*\.\(ogg\|oga\)$'`)
+printVerbose "Found ${#oggs[@]} file(s)\n"
+
+for var in ${mp3s[@]}
 do
-	time=`mp3info -p "%m" $var`
-	value=`expr $value + $time`
+    size=`du -s $var | cut -f 1`
+	mins=`mp3info -p "%m" $var`
+	secs=`mp3info -p "%s" $var`
+
+    recalc
+    parseVerbose
 done
 
-echo "Total time is: `expr $value / 60` hrs"
+
+for var in ${oggs[@]}
+do
+    size=`du -s $var | cut -f 1`
+	time=`ogginfo $var | grep 'Playback length:' | cut -d ':' -f 2- | tr -d 'm','s',' ' | cut -d '.' -f 1`
+    
+    mins=`echo $time | cut -d ':' -f 1`
+    secs=`echo $time | cut -d ':' -f 2`
+    
+    recalc
+    parseVerbose
+done
+
+
+echo -e "\n --- Total Files : $[${#mp3s[@]} + ${#oggs[@]}] -- ${#mp3s[@]} mp3 ${#oggs[@]} ogg"
+echo -e   " --- Total Time  : $thrs hrs $tmins mins $tsecs secs"
+echo -e   " --- Total Size  : $tgigs G $tmegs M $tkils K"
 

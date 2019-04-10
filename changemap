@@ -1,0 +1,17 @@
+#!/bin/bash
+
+MAP=`setxkbmap -query | grep layout: | awk -F: '{print $2}' | tr -d ' ',','` 
+
+if [ "$MAP" == 'ang' ]
+then
+    setxkbmap -layout th
+    xmodmap $HOME/.bindkeys
+elif [ "$MAP" == 'th' ]
+then
+    setxkbmap -layout ang
+    xmodmap $HOME/.bindkeys
+else
+    setxkbmap -layout th
+    xmodmap $HOME/.bindkeys
+fi
+

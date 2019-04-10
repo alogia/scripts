@@ -1,0 +1,522 @@
+#!/usr/bin/ruby
+
+require 'optparse'
+require 'open3' 
+require 'etc' # Etc - Get user name 
+require 'strscan' # StringScanner - Config file scanning
+require 'observer' # Observable - for daemon loading 
+
+BLKID="blkid -o value -s UUID"
+BLKLABEL="blkid -o value -s LABEL"
+BLKTYPE="blkid -o value -s TYPE"
+
+class Device
+  attr_reader :uuid, :mode, :dev, :label, :type, :dump
+  attr_accessor :point, :pass, :present
+
+  public
+  def initialize(uuid, dev, label, point, type, mode, dump, pass, present, mounted)
+    @uuid = uuid
+    @dev = dev
+    @label = label
+    @point = point
+    @type = type
+    @mode = mode
+    @dump = dump
+    @pass = pass
+    @present = present
+    @mounted = mounted
+ end
+
+  def mountable?()
+    if @mounted || !@present 
+      return false
+    end
+    return true
+  end
+
+  def mount(rootpass = nil)
+    sudo = ""
+    raise "This device cannot be mounted" unless mountable?
+    raise "Unknown Device" unless @dev
+    raise "Mount Point not set" unless @point
+    unless rootpass.nil?
+      sudo = "sudo "
+    end
+     
+    unless Dir[@point].any?
+      Open3.popen3(sudo + "mkdir " + @point) do |stdin,stdout,stderr|
+        if rootpass
+          stdin.puts rootpass
+          stdin.close_write
+        end
+        err = stderr.read
+        if err.any?
+          raise err 
+        end
+      end
+    end
+      
+    Open3.popen3(sudo +  "mount " + @dev + " " + @point) do |stdin,stdout,stderr|
+      if rootpass
+        stdin.puts rootpass
+        stdin.close_write
+      end
+      err = stderr.read
+      if err.any?
+        raise "Cannot mount device: " + err
+      end
+    end
+
+    return @mounted = true
+  end
+  
+  def unmount()
+    return false if !@mounted
+  end
+  
+  def mounted?()
+    return @mounted
+  end
+  
+  def present?()
+    return @present
+  end
+
+  def sudo?()
+    return @sudo
+  end
+
+  def user?()
+    if @mode.include? "user"
+      return true
+    else
+      return false
+    end
+  end
+  
+  def writable?()
+    if @mode.include? "rw"
+      return true
+    else
+      return false
+    end
+  end
+
+  def putsInfo()
+    puts "\t-- UUID   = " + @uuid
+    puts "\t * Device  =" + @dev unless @dev.nil?
+    puts "\t * Label   = " + @label unless @label.nil?
+    puts "\t * Point   = " + @point unless @point.nil?
+    puts "\t * Type    = " + @type unless @type.nil?
+    puts "\t * Mode    = " + @mode unless @mode.nil?
+    puts "\t * Dump    = " + @dump unless @dump.nil?
+    puts "\t * Pass    = " + @pass unless @pass.nil?
+    if @present 
+      puts "\t * Present = True"
+    else
+      puts "\t * Present = False"
+    end
+    if @mounted 
+      puts "\t * Mounted = True"
+    else
+      puts "\t * Mounted = False"
+    end
+    puts "\t   - - - - -\n"
+  end
+
+end
+
+MtabDev = /(^\/dev\/sd[a-z][1-9]?)\s+(\/\S*)\s+(\w+)\s+(\S+)+\s+([0-1])\s+([0-2])/
+FstabUUID = /^UUID=(\S+)\s+(\/\S*)\s+(\w+)\s+(\S+)+\s+([0-1])\s+([0-2])/
+FstabDev = /(^\/dev\/sd[a-z][1-9]?)\s+(\/\S*)\s+(\w+)\s+(\S+)+\s+([0-1])\s+([0-2])/
+TAB_DEV     = 1
+TAB_POINT   = 2
+TAB_TYPE    = 3
+TAB_MODE   = 4
+TAB_DUMP   = 5
+TAB_PASS   = 6
+
+class Manager
+  public
+
+  def initialize()
+    @devs = Hash.new
+    @opts = Options.new
+    @pass = nil
+  end
+
+  def readFstab()
+    devs = Hash.new
+    open('/etc/fstab').each do |line|
+      if !(res = FstabDev.match(line)).nil?
+        next if res[TAB_TYPE].include? "swap"
+        uuid = %x{#{BLKID} #{res[TAB_DEV]}}.chomp
+        next if uuid.empty?
+        label = %x{#{BLKLABEL} #{res[TAB_DEV]}}.chomp
+        label = nil if label.empty?
+        devs[uuid] = Device.new(
+                                uuid, 
+                                res[TAB_DEV], 
+                                label, 
+                                res[TAB_POINT], 
+                                res[TAB_TYPE], 
+                                res[TAB_MODE], 
+                                res[TAB_DUMP], 
+                                res[TAB_PASS], 
+                                nil, 
+                                nil)
+      elsif !(res = FstabUUID.match(line)).nil?
+        next if res[TAB_TYPE].include? "swap"
+        label = %x{#{BLKLABEL} #{res[TAB_DEV]}}.chomp
+        label = nil if label.empty?
+        devs[res[TAB_DEV]] = Device.new(
+                                        res[TAB_DEV], 
+                                        nil,
+                                        label, 
+                                        res[TAB_POINT], 
+                                        res[TAB_TYPE], 
+                                        res[TAB_MODE], 
+                                        res[TAB_DUMP], 
+                                        res[TAB_PASS], 
+                                        nil, 
+                                        nil)
+      end
+    end
+    return devs
+  end
+
+  def readMtab()
+    devs = Hash.new
+    open('/etc/mtab').each do |line|
+      unless (res = MtabDev.match(line)).nil?
+        uuid = %x{#{BLKID} #{res[TAB_DEV]}}.chomp
+        label = %x{#{BLKLABEL} #{res[TAB_DEV]}}.chomp
+        label = nil if label.empty?
+        devs[uuid] = Device.new(
+                                uuid, 
+                                res[TAB_DEV], 
+                                label, res[TAB_POINT], 
+                                res[TAB_TYPE], 
+                                res[TAB_MODE], 
+                                res[TAB_DUMP], 
+                                res[TAB_PASS], 
+                                true, 
+                                true)
+      end
+    end
+    return devs
+  end
+
+  def update()
+    fstab = readFstab()
+    mtab = readMtab()
+    sdevs = Hash.new
+
+    sds = Dir["/dev/sd*"]
+    sds.each do |sd|
+      uuid = %x{#{BLKID} #{sd}}.chomp
+      next if uuid.empty?
+      label = %x{#{BLKLABEL} #{sd}}.chomp
+      label = nil if label.empty?
+      type = %x{#{BLKTYPE} #{sd}}.chomp
+      next if type.include? "swap"      
+      type = nil if type.empty?
+      if mtab[uuid].nil?
+        if fstab[uuid].nil?
+          sdevs[uuid] = Device.new(uuid, sd, label, nil, type, nil, nil, nil, true, false)
+        else
+          sdevs[uuid] = Device.new(
+                                   uuid,
+                                   sd,
+                                   label,
+                                   fstab[uuid].point,
+                                   type,
+                                   fstab[uuid].mode,
+                                   fstab[uuid].dump,
+                                   fstab[uuid].pass,
+                                   true,
+                                   false)
+        end
+      end
+    end
+
+    @devs = fstab
+    sdevs.each do |uuid,dev|
+      @devs[uuid] = dev
+    end
+    mtab.each do |uuid,dev|
+      @devs[uuid] = dev
+    end
+  end
+
+  def all()
+    return @devs
+  end
+
+  def unmounted()
+    umounted = Hash.new
+    @devs.each do |uuid,dev|
+      umounted[uuid] = dev if !dev.mounted? && dev.present?
+    end
+    return umounted
+  end
+
+  def mountable()
+    mnt = Hash.new
+    @devs.each do |uuid,dev|
+      mnt[uuid] = dev if dev.mountable?
+    end
+    return mnt
+  end
+
+  def getRoot()
+    print "Root Password? "
+    @pass = gets.chomp
+  end
+  
+  def mount(dev, root=false)
+    begin 
+      if root
+        dev.mount(@pass)
+      else
+        dev.mount()
+      end
+    rescue
+      puts "Error: " + $!
+      print "Choose one: \n 1) Retry\n 2) New mount point\n" 
+      if Etc.getlogin != "root" 
+        print " 3) Try as root\n"
+      end 
+      print " *) Cancel\n Choice: "
+      ans = gets.chomp
+
+      case ans
+        # Retry
+      when '1'
+        return mount(dev)
+
+        # New Mount Point
+      when '2'
+        print "New Point: "
+        dev.point = gets.chomp
+        return mount(dev)
+
+        # Root Mount
+      when '3'
+        if Etc.getlogin != "root"
+          getRoot() unless @pass
+          return mount(dev, true)
+        else 
+          return false
+        end
+        
+        # Otherwise
+      else
+        return false
+      end
+    end
+  end
+
+  def present()
+    present = Hash.new
+    @devs.each do |uuid,dev|
+      present[uuid] = dev if dev.present
+    end
+    return present
+  end
+
+  def mountAll()
+    mountable.each_value do |dev|
+      begin 
+        dev.putsInfo if mount(dev)
+      rescue
+        $stderr.print "!!! Error mounting device ["
+        if dev.label 
+          $stderr.print dev.label 
+        elsif dev.dev 
+          $stderr.print dev.dev 
+        else 
+          $stderr.print dev.uuid 
+        end
+        $stderr.print "] on " + dev.point + "\n\t * " + $! + "\n"
+        raise
+      end
+    end
+  end
+  
+  def mounted()
+    mounted = Hash.new
+    @devs.each do |uuid,dev|
+      mounted[uuid] = dev if dev.mounted?
+    end
+    return mounted
+  end
+  
+end
+
+MDEV_DIR = Etc.getpwnam(Etc.getlogin).dir + "/.config/mdev/"
+MDEV_RC = "mdevrc"
+MDEV_DEVICES = "devices"
+
+class Options 
+
+  attr_accessor :show, :openWith, :unmountOnClose, :pointPattern, :mountRoot, :mountTo
+
+public
+
+  def readRC(file=MDEV_DIR + MDEV_RC)
+    num = 0
+    open(file).each do |line|
+      scanner = StringScanner.new(line)
+      num = num.next
+      begin
+        scanner.scan(/\s*/)
+        scanShow(scanner)
+        scanOpenWith(scanner)
+        scanPointPattern(scanner)
+        scanMountRoot(scanner)
+        scanUnmountOnClose(scanner)
+        scanComment(scanner)
+        scanUnknown(scanner)
+      rescue
+        $stderr.print "Error in config file [" + file + "]\n" 
+        $stderr.print "\t * Line " + num.to_s + " -- Error: " + $! + "\n"
+      end
+    end
+  end
+
+  def readDevices(file=MDEV_DIR + MDEV_DEVICES)
+  end
+
+  def getPointPattern(dev)
+    tmp = @pointPattern
+    tmp.sub!("%L", dev.label)
+    tmp.sub!("%D", dev.dev)
+    tmp.sub!("%U", dev.uuid)
+    tmp.sub!("%T", dev.type)
+    return tmp
+  end
+
+private
+
+  def scanComment(scanner)
+    scanner.scan(/#.*/)
+  end
+
+  def scanSet(scanner, option)
+    scanner.scan(/\s*=\s*/) or raise "Garbled config after '#{option}'"
+  end
+
+  def scanShow(scanner)
+    scanner.scan(/show/) or return nil
+    scanSet(scanner, "show")
+    res = scanner.scan(/(user|all)/) or raise "Invalid option for 'show'"
+    return @show = res
+  end
+  
+  def scanOpenWith(scanner)
+    scanner.scan(/open-with/) or return nil
+    scanSet(scanner, "open-with")
+    res = scanner.scan(/.+/) or raise "Invalid option for 'open-with'"
+    return @openWith = res
+  end
+
+  def scanPointPattern(scanner)
+    scanner.scan(/point-pattern/) or return nil
+    scanSet(scanner, "point-pattern")
+    res = scanner.scan(/.+/) or raise "Invalid setting for 'point-pattern'"
+    return @pointPattern = parsePointPattern(res)
+  end
+
+  def parsePointPattern(string)
+  end
+
+  def scanMountRoot(scanner)
+    return nil if scanner.scan(/mount-root/).nil?
+    scanSet(scanner, "mount-root")
+    res = scanner.scan(/\S+/) or raise "Invalid setting after 'mount-root'"
+    return @mountRoot = res
+  end
+
+  def scanUnmountOnClose(scanner)
+    return nil if scanner.scan(/unmount-on-close/).nil?
+    scanSet(scanner "unmount-on-close")
+    res = scanner.scan(/(true|false)/)
+    return @unmountOnClose = res
+  end
+
+  def scanUnknown(scanner)
+    if res = scanner.scan(/\S+/)
+      raise "Unknow Option '" + res + "'"
+    end
+  end
+
+end
+
+$rcs = Options.new
+$rcs.readRC
+
+$man = Manager.new
+$man.update()
+
+
+
+
+optp = OptionParser.new
+
+#-----------------------------------------------------
+#Info Flags
+optp.on("-d", "--devices") do
+  puts "Devices Present:"
+  $man.present.each_value do |dev|
+    dev.putsInfo
+  end
+end
+
+optp.on("-l", "--all") do
+  puts "All Devices:"
+  $man.all.each_value do |dev|
+    dev.putsInfo
+  end
+end
+
+optp.on("-z", "--mountable") do
+  puts "Mountable Devices:"
+  $man.mountable.each_value do |dev|
+    dev.putsInfo
+  end
+end
+
+optp.on("-m", "--mounted") do
+  puts "Mounted Devices:"
+  $man.mounted.each_value do |dev|
+    dev.putsInfo
+  end
+
+end
+
+optp.on("-u", "--unmounted") do
+  puts "Unmounted Devices:"
+  $man.unmounted.each_value do |dev|
+    dev.putsInfo
+  end
+end
+
+optp.on_tail("-h", "--help") do
+  puts optp
+  exit
+end
+
+#----------------------------------------------------
+#Action flags
+
+optp.on("-a", "--mount-all") do
+  puts "Devices Mounted:"
+  begin
+    $man.mountAll
+  rescue
+  end
+end
+
+optp.parse!(ARGV)
