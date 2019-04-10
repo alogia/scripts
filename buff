@@ -1,0 +1,28 @@
+#!/bin/bash
+
+
+raise_error() {
+	local error_message="$@"
+    echo "${error_message}" 1>&2;
+}
+
+print_usage() {
+	echo "Usage: buff up|down|status"
+}
+
+arg=$1
+case $arg in
+	up)
+		sudo systemctl start openvpn-client@west
+		;;
+	down)
+		sudo systemctl stop openvpn-client@west
+		;;
+	status)	
+		sudo systemctl status openvpn-client@west
+		;;
+	*)	
+		raise_error "Unknown argument: ${arg}"
+		print_usage
+		;;
+esac

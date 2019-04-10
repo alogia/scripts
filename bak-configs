@@ -1,3 +1,0 @@
-#!/bin/sh 
-
-tar auf ~/.bak/confs.tar.bz2 ~/.mutt ~/.vim ~/.emacs ~/.emacs.d ~/.config/mc ~/.fetchmailrc ~/.msmtprc ~/.inputrc ~/.bash_aliases ~/.goldendict ~/.shotwell ~/.sword ~/.todo ~/.screenrc ~/.rtorrent.rc ~/.procmailrc ~/.bindkeys ~/.xmonad ~/.xiphos ~/.stellarium 

@@ -1,0 +1,16 @@
+#!/bin/sh
+
+REMOTE=dropbox
+
+DEFAULT='-P -l'
+EXCLUDE=.#*
+
+
+#Directories to sync --WARNING: WILL DELETE FILE ON DEST NOT ON ORIGIN
+rclone sync $HOME/org/ 		$REMOTE:/org/ 	 	$DEFAULT --exclude $EXCLUDE 
+rclone sync $HOME/devel/ 	$REMOTE:/devel/ 	$DEFAULT --exclude $EXCLUDE --exclude node_modules/ 
+rclone sync $HOME/bin/ 		$REMOTE:/bin/ 	 	$DEFAULT --exclude $EXCLUDE
+
+#Directories to copy -- WILL LEAVE ALL FILES ON DEST
+rclone copy $HOME/video/ 	$REMOTE:/Video/ 	$DEFAULT --exclude $EXCLUDE --b2-disable-checksum 
+rclone copy $HOME/docs/ 	$REMOTE:/Documents/ $DEFAULT --exclude $EXCLUDE
