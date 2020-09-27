@@ -1,5 +1,24 @@
 #!/bin/bash
 
-cd ~/ทอร์เรนท์/jundi    # set your watch directory here
+WATCH_DIR=~/tor/watch
+
+################################################
+#  A simple script to act as a protocol handler
+# for magnet links to be saved into a watch
+# directory. Uses notify-send to display messages.
+################################################
+
+# Find the name in the torrent link text and escape all the ascii sequences
+NAME=$(echo $1 |  grep -o 'dn=[^&]*' | sed 's/dn=//;s/+/ /g;s/%\(..\)/\\x\1/g;')
+
+# Convert to ascii with echo -e and notify
+notify-send "Added Magnet Link --- $(echo -e $NAME)"
+
+cd $WATCH_DIR
+
+# Check for duplicates
 [[ "$1" =~ xt=urn:btih:([^&/]+) ]] || exit;
+
+# TODO: Figure out what this code does ----->>>
 echo "d10:magnet-uri${#1}:${1}e" > "meta-${BASH_REMATCH[1]}.torrent"
+
