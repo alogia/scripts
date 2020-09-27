@@ -1,9 +1,20 @@
 #!/usr/bin/ruby
 
+###########################################################
+## folderize
+##
+## A tool to help quickly rename and create correct folder
+## structure for files
+## 
+###########################################################
+
 require 'fileutils'
 #include FileUtils::Verbose
 
 
+###########################################################
+## ask
+###########################################################
 def ask(question, quit = false)
     while true 
         if quit
@@ -26,6 +37,10 @@ def ask(question, quit = false)
     end
 end
 
+
+###########################################################
+## getidx
+###########################################################
 def getidx(question, low, high)
     while true
         print question + ": "
@@ -63,9 +78,14 @@ def getidx(question, low, high)
     end
 end
 
+
+###########################################################
+## parse
+###########################################################
 def parse(file)
     parts = Array.new
-    file = file.delete('/')
+
+        
     if file.include?(" by ") 
         if ask "Divide with word 'by'?"
             parts = file.split(" by ")
@@ -99,6 +119,10 @@ def parse(file)
     return parts
 end        
 
+
+###########################################################
+## concatenate
+###########################################################
 def concatenate(array)
     idxs = getidx("Concatenate which?" ,1, array.size)
     print "Separator? "
@@ -115,6 +139,10 @@ def concatenate(array)
     return (array - rem) << res
 end
 
+
+###########################################################
+## delete
+###########################################################
 def delete(array)
     idxs = getidx("Delete which?" ,1, array.size)
     dels = Array.new
@@ -125,7 +153,10 @@ def delete(array)
 end
 
 
-# FIXME: Separate by indecies like 'cut'
+###########################################################
+## separate
+## FIXME: Separate by indecies like 'cut' 
+###########################################################
 def separate(array)
     idxs = getidx("Operate on which? ",1, array.size)
     print "Separator? "
@@ -139,50 +170,79 @@ def separate(array)
     return array - rem
 end
 
-def mkdirs(folders)
+
+###########################################################
+## mkfolder
+##
+## Creates a folder with error protection and changes to
+## that directory if enter == true
+##
+## Returns the new folder name
+###########################################################
+def mkfolder(path, enter=false)
+  begin  
+    FileUtils.mkdir(path)
+    FileUtils.chdir(path) if enter
+  rescue Errno::EEXIST
+    while true
+      print "Directory Exists:\n\t1) Merge\n\t2) Replace\n\t3) Rename\n\t4 Abort\n\n"
+      print "Choose: "
+      ans = $stdin.gets 
+      redo if ans.nil? or ans.empty?
+      ans.chomp!
+      redo if ans.to_i > 4 or ans.to_i < 1
+      break
+    end
+    case ans.to_i
+    when 1
+      FileUtils.chdir(path) if enter
+      return path
+    when 2
+      print "Are you sure? (y): "
+      ans = $stdin.gets
+      if ans.to_s == 'y'   
+        FileUtils.rm_rf(path)
+        FileUtils.mkdir(path)
+        FileUtils.chdir(path) if enter
+        return path
+      else
+        puts "Aborting..."
+        exit 1
+      end
+    when 3
+      print "Enter new name:  "
+      newpath = $stdin.gets
+      mkfolder(newpath, enter)
+      return newpath
+    when 4
+      puts "Aborting..."
+      exit 1
+    end
+  end
+  return path
+end
+
+
+###########################################################
+## mkdirs - Create the directories
+##
+## Creates a folder structure from an array of names
+## and then enters it if enter == true
+###########################################################
+def mkdirs(folders, enter=false)
     oldCWD = FileUtils.pwd
-    
     path = folders.join("/")
     folders.delete_at(folders.size - 1)
     folders.each do |f|
-        begin  
-            FileUtils.mkdir(f)
-            FileUtils.chdir(f)
-        rescue Errno::EEXIST
-            while true
-                print "Directory Exists:\n\t1) Merge\n\t2) Replace\n\t3) Abort\n\n"
-                print "Choose: "
-                ans = $stdin.gets 
-                redo if ans.nil? or ans.empty?
-                ans.chomp!
-                redo if ans.to_i > 3 or ans.to_i < 1
-                break
-            end
-            if ans.to_i == 1
-                FileUtils.chdir(f)
-            end
-            if ans.to_i == 2
-                print "Are you sure? (y): "
-                ans = $stdin.gets
-                if ans.to_s == 'y'   
-                    FileUtils.rm_rf(f)
-                    FileUtils.mkdir(f)
-                    FileUtils.chdir(f)
-                else
-                    puts "Aborting..."
-                    exit 1
-                end
-            end
-            if ans.to_i == 3  
-                puts "Aborting..."
-                exit 1
-            end
-        
-        end
+      mkfolder(f, true)
     end
-    FileUtils.chdir(oldCWD)
+    FileUtils.chdir(oldCWD) unless enter
 end
 
+
+###########################################################
+## clean
+###########################################################
 def clean(array)
     puts "0) All\n"
     idxs = getidx("Operate on which?",0,array.size) 
@@ -198,6 +258,10 @@ def clean(array)
     return array
 end
 
+
+###########################################################
+## cut
+###########################################################
 def cut(text)
     ans = getidx("Operate on which? ", 1, text.size).first
     puts "\n\n------------------------------" 
@@ -221,6 +285,10 @@ def cut(text)
     return text
 end
 
+
+###########################################################
+## add
+###########################################################
 def add(array)
     print "Enter String:  "
     ans = $stdin.gets
@@ -229,6 +297,10 @@ def add(array)
     return array << ans
 end
 
+
+###########################################################
+## choose
+###########################################################
 def choose(pleft, folders = Array.new)
     
     while true do
@@ -325,7 +397,9 @@ def choose(pleft, folders = Array.new)
     
 end
 
-
+###########################################################
+## Main loop
+###########################################################
 ARGV.each do |file|
     
     exists = true
@@ -333,7 +407,16 @@ ARGV.each do |file|
          exit 0 unless ask "Directory does not exist; Create directories anyhow?"
          exists = false
     end
-        
+
+    # If file is not in a directory, create one and throw it in.
+    if File.directory?(file)
+      file = file.delete('/')
+    elsif File.file?(file)
+      newfolder = mkfolder(File.basename(file, ".*"))
+      FileUtils.mv(file, newfolder)
+      file = newfolder
+    end
+    
     pleft = parse(file)
     folders = choose(pleft)
     path = folders.join("/")
