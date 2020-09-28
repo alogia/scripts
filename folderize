@@ -9,6 +9,7 @@
 ###########################################################
 
 require 'fileutils'
+require 'io/console'
 #include FileUtils::Verbose
 
 
@@ -22,7 +23,7 @@ def ask(question, quit = false)
         else
             print question + " (y/n):  "
         end
-        yn = $stdin.gets
+        yn = STDIN.getch
         next if yn.nil? or yn.empty?
         yn.chomp!
         if yn == 'y'
@@ -42,40 +43,44 @@ end
 ## getidx
 ###########################################################
 def getidx(question, low, high)
-    while true
-        print question + ": "
-        res = $stdin.gets
-        redo if res.nil? or res.empty?
-        idxs = res.chomp.split(" ")
-        nums = Array.new
-        idxs.each do |idx|
-            if !(range = idx.match(/([1-9])*-([1-9])*/)).nil?
-                if !range[1].nil? and !range[2].nil?
-                    range[1].to_i.upto(range[2].to_i) do |x|
-                        nums << x
-                    end
-                elsif range[1].nil? and !range[2].nil?
-                    low.upto(range[2].to_i) do |x|
-                        nums << x
-                    end
-                elsif !range[1].nil? and range[2].nil?
-                    range[1].to_i.upto(high) do |x|
-                        nums << x
-                    end
-                end
-            elsif idx.to_i
-                nums << idx.to_i 
-            end
+  if low == high
+    puts "Choosing " + low.to_s
+    return [low]
+  end
+  while true
+    print question + ": "
+    res = $stdin.gets
+    redo if res.nil? or res.empty?
+    idxs = res.chomp.split(" ")
+    nums = Array.new
+    idxs.each do |idx|
+      if !(range = idx.match(/([1-9])*-([1-9])*/)).nil?
+        if !range[1].nil? and !range[2].nil?
+          range[1].to_i.upto(range[2].to_i) do |x|
+            nums << x
+          end
+        elsif range[1].nil? and !range[2].nil?
+          low.upto(range[2].to_i) do |x|
+            nums << x
+          end
+        elsif !range[1].nil? and range[2].nil?
+          range[1].to_i.upto(high) do |x|
+            nums << x
+          end
         end
-        
-        nums.each do |num|
-            if num.to_i < low or num.to_i > high 
-                print "Invalid Index: " + idx
-                redo
-            end
-        end
-        return nums.uniq.sort
+      elsif idx.to_i
+        nums << idx.to_i 
+      end
     end
+    
+    nums.each do |num|
+      if num.to_i < low or num.to_i > high 
+        print "Invalid Index: " + idx
+        redo
+      end
+    end
+    return nums.uniq.sort
+  end
 end
 
 
@@ -85,6 +90,8 @@ end
 def parse(file)
     parts = Array.new
 
+    puts "\n------------------------------------------\n"
+    puts "Loading file: " + file + "\n"
         
     if file.include?(" by ") 
         if ask "Divide with word 'by'?"
@@ -304,9 +311,9 @@ end
 def choose(pleft, folders = Array.new)
     
     while true do
-        puts "\n\n#############################"
-        puts "------" + folders.join('/') + "-----"
-        puts "Add Path:"
+        puts "\n\n###################################################"
+        puts "------ " + folders.join('/') + " -----"
+        puts "Add Path: "
 
         i = 1
         pleft.each do |p|
@@ -315,86 +322,82 @@ def choose(pleft, folders = Array.new)
         end
         
         puts "\n---------\n" 
-        puts i.to_s + ") " + "New"
-        i = i + 1
-        puts i.to_s + ") " + "Cut"
-        i = i + 1
-        puts i.to_s + ") " + "Concat"
-        i = i + 1
-        puts i.to_s + ") " + "Delete"
-        i = i + 1
-        puts i.to_s + ") " + "Divide"
-        i = i + 1
-        puts i.to_s + ") " + "Clean"
-        puts "0) Done"
-        
+        puts " a ) Add"
+        puts " c ) Cut"
+        puts " o ) Concat"
+        puts " d ) Delete"
+        puts " v ) Divide"
+        puts " l ) Clean"
+        puts " n ) Next"
+        puts " f ) Finished"
+        puts " q ) Quit"
+        puts "\n---------\n" 
         
         while true
             print "Choose: "
-            ans = $stdin.gets 
+            ans = STDIN.getch 
             redo if ans.nil? or ans.empty?
-            ans.chomp!
-            redo if ans.to_i > i or ans.to_i < 0
+            
+            redo if ans.to_i != 0 and ans.to_i > i or ans.to_i < 0
             break
         end
         
         res = nil
-        if ans.to_i == i - 5
+        case ans
+        when "a"
             while res.nil? 
                 res = add(pleft)
             end
             pleft = res
             redo
-        end
-        if ans.to_i == i - 4
+        when "c"
             while res.nil? 
                 res = cut(pleft)
             end
             pleft = res
             redo
-        end
-        if ans.to_i == i - 3
+        when "o"
             while res.nil? 
                 res = concatenate(pleft)
             end
             pleft = res
             redo
-        end
-        if ans.to_i == i - 2 
+        when "d"
             while res.nil? 
                 res = delete(pleft)
             end
             pleft = res
             redo
-        end
-        if ans.to_i == i - 1 
+        when "v"
             while res.nil?
                 res = separate(pleft) 
             end
             pleft = res
             redo
-        end
-        if ans.to_i == i
+        when "l"
             while res.nil?
                 res = clean(pleft)
             end
             pleft = res
             redo
-        end
-        
-        if ans.to_i == 0
+        when "n"
+          folders = nil
+          break
+        when "f"
             if folders.nil? or folders.empty?
                 exit 0 if ask("You have no selected folders. Quit?")
                 redo
             end
             break
+        when "q"
+          exit 0
         end
         
         folders << pleft.delete_at(ans.to_i - 1)
         
     end
-    return folders
     
+    return folders
 end
 
 ###########################################################
@@ -407,33 +410,34 @@ ARGV.each do |file|
          exit 0 unless ask "Directory does not exist; Create directories anyhow?"
          exists = false
     end
-
-    # If file is not in a directory, create one and throw it in.
+    
     if File.directory?(file)
       file = file.delete('/')
-    elsif File.file?(file)
-      newfolder = mkfolder(File.basename(file, ".*"))
-      FileUtils.mv(file, newfolder)
-      file = newfolder
     end
     
-    pleft = parse(file)
+    pleft = parse(File.basename(file, ".*"))
     folders = choose(pleft)
+    next if folders.nil?
     path = folders.join("/")
     
     while true 
-        ans = ask("++++ Move ++++" + file + " ----> " + path, true)
+        ans = ask("++++ Move ++++ " + file + " ----> " + path, true)
         
         if ans.nil?
             exit 0
         elsif ans
-            mkdirs(folders)
-            FileUtils.mv(file, path) if exists
-            break
+          if File.file?(file)
+            newfolder = mkfolder(File.basename(file, ".*"))
+            FileUtils.mv(file, newfolder)
+            file = newfolder
+          end
+          mkdirs(folders)
+          FileUtils.mv(file, path) if exists
+          break
         else
-            folders = choose(pleft, folders)
-            path = folders.join("/")
-            next
+          folders = choose(pleft, folders)
+          path = folders.join("/")
+          next
         end
     end
 end
